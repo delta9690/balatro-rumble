@@ -1,0 +1,17 @@
+{
+    "id": "Rumble",
+    "name": "Rumble",
+    "display_name": "Rumble",
+    "author": ["Luna-Terra"],
+    "description": "Rebuilds Balatro's vibration into a configurable per-event engine. Every haptic source gets its own strength, decay, and heavy/light motor mix: card draws, coins, cash out, hand played, card scoring, blind reveal, menu confirm/focus/tap, and the title card sequence.",
+    "prefix": "rumble",
+    "main_file": "main.lua",
+    "priority": 0,
+    "badge_colour": "2E7D32",
+    "badge_text_colour": "E8F5E9",
+    "version": "1.0.0",
+    "dependencies": [
+        "Steamodded (>=1.0.0~BETA-0614a)",
+        "Lovely (>=0.7.1)"
+    ]
+}

@@ -371,7 +371,6 @@ function Rumble.install_ui()
 
     Rumble.MOD.extra_tabs = function()
         Rumble.ensure_config()
-
         return {
             { label = "Gameplay", tab_definition_function = gameplay_tab },
             { label = "UI", tab_definition_function = ui_tab },
@@ -379,4 +378,9 @@ function Rumble.install_ui()
             { label = "UI Feel", tab_definition_function = ui_feel_tab },
         }
     end
+
+    -- register now AND again from love.update. both calls are idempotent, and
+    -- this is what keeps the cycle widgets alive if the love.update wrapper
+    -- bailed out at load.
+    Rumble.try_install_funcs()
 end

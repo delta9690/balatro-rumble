@@ -186,6 +186,9 @@ end
 Rumble.DEFAULTS = {
     master_strength = 100,
     desktop_hold_ms = 60,
+    desktop_light_hold_ms = 60,
+    desktop_heavy_hold_ms = 90,
+    heavy_min_impulse_ms = 80,
     android_min_pulse_ms = 12,
     android_settle_ms = 50,
     debug_log = false,
@@ -204,6 +207,14 @@ function Rumble.ensure_config()
         if c[key] == nil then
             c[key] = default
         end
+    end
+
+    if type(c.desktop_light_hold_ms) ~= "number" then
+        c.desktop_light_hold_ms = tonumber(c.desktop_hold_ms) or Rumble.DEFAULTS.desktop_light_hold_ms
+    end
+
+    if type(c.desktop_heavy_hold_ms) ~= "number" then
+        c.desktop_heavy_hold_ms = tonumber(c.desktop_hold_ms) or Rumble.DEFAULTS.desktop_heavy_hold_ms
     end
 
     for _, cat in ipairs(Rumble.ORDERED_CATEGORIES) do
@@ -243,7 +254,19 @@ function Rumble.master_fraction()
 end
 
 function Rumble.hold_s()
-    return math.max(0, (Rumble.MOD.config.desktop_hold_ms or 60) / 1000)
+    return Rumble.hold_light_s()
+end
+
+function Rumble.hold_light_s()
+    return math.max(0, (Rumble.MOD.config.desktop_light_hold_ms or 60) / 1000)
+end
+
+function Rumble.hold_heavy_s()
+    return math.max(0, (Rumble.MOD.config.desktop_heavy_hold_ms or 90) / 1000)
+end
+
+function Rumble.heavy_min_impulse_s()
+    return math.max(0, (Rumble.MOD.config.heavy_min_impulse_ms or 80) / 1000)
 end
 
 function Rumble.min_pulse()

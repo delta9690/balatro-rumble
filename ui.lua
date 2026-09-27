@@ -253,10 +253,13 @@ local function config_tab()
         rows[#rows + 1] = note_row("min pulse: raise if light taps never register")
         rows[#rows + 1] = note_row("settle gap: raise if the motor stutters between pulses")
     else
-        rows[#rows + 1] = slider_setting("Attack Hold (ms)", "desktop_hold_ms", 0, 250, "")
-        rows[#rows + 1] = slider_setting("Heavy Stall Floor", "heavy_stall_floor", 0, 40, "%")
+        rows[#rows + 1] = slider_setting("Light Hold (ms)", "desktop_light_hold_ms", 0, 250, "")
+        rows[#rows + 1] = slider_setting("Heavy Hold (ms)", "desktop_heavy_hold_ms", 0, 350, "")
+        rows[#rows + 1] = slider_setting("Heavy Min Impulse (ms)", "heavy_min_impulse_ms", 0, 350, "")
+        rows[#rows + 1] = slider_setting("Heavy Stall Floor", "heavy_stall_floor", 0, 100, "%")
         rows[#rows + 1] = toggle_setting("Heavy Gate", "heavy_gate")
-        rows[#rows + 1] = note_row("below the stall floor the heavy motor just twitches, so that energy is diverted to the light motor")
+        rows[#rows + 1] = note_row("below the stall floor, or under heavy min impulse, heavy is rerouted to light")
+        rows[#rows + 1] = note_row("vanilla relative rumble tops out near 40%; this mod no longer hard-caps to it")
     end
 
     rows[#rows + 1] = toggle_setting("Debug Log", "debug_log")

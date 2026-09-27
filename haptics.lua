@@ -138,7 +138,8 @@ function Rumble.reset_state()
     if Rumble.desktop_env then
         Rumble.desktop_env.level = 0
         Rumble.desktop_env.peak = 0
-        Rumble.desktop_env.hold = 0
+        Rumble.desktop_env.light_hold = 0
+        Rumble.desktop_env.heavy_hold = 0
         Rumble.desktop_env.heavy_active = true
     end
 

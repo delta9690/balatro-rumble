@@ -1,6 +1,9 @@
 return {
     master_strength = 100,
     desktop_hold_ms = 60,
+    desktop_light_hold_ms = 60,
+    desktop_heavy_hold_ms = 90,
+    heavy_min_impulse_ms = 80,
     android_min_pulse_ms = 12,
     android_settle_ms = 50,
     debug_log = false,

@@ -1,16 +1,4 @@
--- metadata lives in Rumble.json. two things to NOT put back in this file:
---   1. a --- STEAMODDED HEADER block (steamodded would load the mod twice)
---   2. any reference to SMODS.INIT
---
--- SMODS.INIT was removed in steamodded 1.0.0+, and it's what produced
--- "attempt to index field 'INIT' (a nil value)". the loader flags SMODS.INIT
--- as an outdated 0.9.8 pattern, and older builds papered over it with a
--- compat shim that created the table. legacy header detection triggered that
--- shim; json metadata does not. top level scope is the init now, which is
--- also what the official migration guide says to do.
---
--- extra bonus: that same outdated path wipes mod.config and skips
--- load_mod_config, so removing this also gets config loading working right.
+
 
 if not Rumble then
     Rumble = {}
@@ -193,6 +181,8 @@ Rumble.DEFAULTS = {
     android_min_pulse_ms = 12,
     android_settle_ms = 50,
     debug_log = false,
+    heavy_stall_floor = 15,
+    heavy_gate = true,
 }
 
 function Rumble.ensure_config()

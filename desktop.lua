@@ -12,6 +12,12 @@ Rumble.desktop_env = Rumble.desktop_env or {
     hold = 0,
     decay = 10,
     heavy = 0.5,
+
+    -- latched once per burst at attack. decides for the WHOLE burst whether
+    -- the heavy motor participates at all. testing this per-frame is what
+    -- made the light motor double mid-tail: as the envelope decayed through
+    -- the stall floor, the pan angle snapped from 0.5 to 0 in one frame.
+    heavy_active = true,
 }
 
 Rumble.last_fire = Rumble.last_fire or {}
@@ -23,12 +29,32 @@ end
 -- device dependent, hence configurable. below this the heavy motor just
 -- stalls rather than buzzing weakly, so there is no point commanding it.
 local function heavy_floor()
-    local pct = tonumber(Rumble.MOD.config.heavy_stall_floor) or 15
-    return math.max(0, math.min(0.6, pct / 100))
+    local v = tonumber(Rumble.MOD.config.heavy_floor) or 15
+    -- clamp covers the full plausible config range, not just the slider's.
+    -- the slider tops out at 40% but a hand-edited config.lua can say 100.
+    return math.max(0, math.min(100, v)) / 100
 end
 
 local function heavy_gate_on()
-    return Rumble.MOD.config.heavy_gate ~= false
+    local v = Rumble.MOD.config.heavy_gate
+    if v == nil then
+        return true
+    end
+    return v ~= false
+end
+
+-- decides, from a burst's PEAK command, whether the heavy motor is worth
+-- driving at all this burst. pure function of (mix, peak, master) so the
+-- answer can be computed once at attack and then trusted for the whole tail.
+local function heavy_participates(heavy, peak, master)
+    if not heavy_gate_on() or heavy <= 0 then
+        return true
+    end
+
+    local peak_amt = clamp01((peak or 0) * 0.4 * (master or 1))
+    local peak_left = peak_amt * math.sin(heavy * math.pi / 2)
+
+    return peak_left >= heavy_floor()
 end
 
 local function apply_rumble(left, right)
@@ -99,6 +125,7 @@ function Rumble.run_desktop(dt, fired, master)
             env.peak = env.level
             env.decay = math.max(1, Rumble.cat_decay(strongest_cat))
             env.heavy = Rumble.cat_heavy_frac(strongest_cat)
+            env.heavy_active = heavy_participates(env.heavy, env.peak, master)
             env.hold = Rumble.hold_s()
             Rumble.dbg("desktop ATTACK %s w=%.3f heavy=%.2f (level %.3f->%.3f)",
                 strongest_cat, strongest, env.heavy, before, env.level)
@@ -132,26 +159,23 @@ function Rumble.run_desktop(dt, fired, master)
         end
     end
 
-    local amt = clamp01(env.level * 0.4 * master)
+        local amt = clamp01(env.level * 0.4 * master)
 
-    -- constant-power crossfade
-    local t = env.heavy or 0.5
+    -- one continuous pan, no per-frame branch. when the heavy motor doesn't
+    -- participate, t = 0 routes the FULL amplitude to the light motor via
+    -- cos(0) = 1. that's a straight fold, not an addition, so the light motor
+    -- gets exactly `amt` and never doubles. it also means there's no mid-burst
+    -- discontinuity left to hear, because the decision was made at attack.
+    local t = 0
+    if env.heavy_active then
+        t = env.heavy or 0.5
+    end
+
     local left = clamp01(amt * math.sin(t * math.pi / 2))
     local right = clamp01(amt * math.cos(t * math.pi / 2))
 
-    -- heavy stall gate. if the heavy channel comes in under the floor, hand
-    -- that energy to the light motor instead of commanding a stalled one.
-    -- total power is preserved - the event just gets rendered by the motor
-    -- that can actually render it. this is the difference between a crisp
-    -- tick and a dying buzz on every low-weight, high-repeat event.
-    local floor = heavy_floor()
-    if heavy_gate_on() and left > 0 and left < floor then
-        right = clamp01(right + left)
-        left = 0
-    end
-
-    if Rumble.dbg_enabled() and (left > 0 or right > 0) then
-        Rumble.dbg("desktop COMMAND L=%.3f R=%.3f", left, right)
+    if Rumble.verbose() then
+        Rumble.dbg("desktop COMMAND L=%.3f R=%.3f t=%.2f", left, right, t)
     end
 
     apply_rumble(left, right)

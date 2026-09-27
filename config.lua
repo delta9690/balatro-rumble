@@ -44,4 +44,7 @@ return {
     startup_card_enabled = true, startup_card_strength = 100,
     startup_card_decay = 3,      startup_card_duration_ms = 250,
     startup_card_min_retrigger_ms = 0, startup_card_motor_profile_index = 5,
+
+    heavy_stall_floor = 15,
+    heavy_gate = true,
 }

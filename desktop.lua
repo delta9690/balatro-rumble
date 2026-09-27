@@ -1,11 +1,8 @@
 -- desktop.lua - the gamepad rumble engine. attack -> hold -> decay envelope,
 -- split across two motor channels with constant-power panning.
---
--- the old linear split (left = amt*heavy, right = amt*(1-heavy)) halved both
--- motors at a balanced mix. a 50/50 mix became 0.5 and 0.5 instead of
--- something strong. sin/cos crossfade fixes that - balanced runs both motors
--- at ~0.707 of commanded amplitude, so total perceived power stays flat
--- across the whole heavy/light range.
+-- gate the heavy motor channel, reroute sub-stall energy to the light motor that can actually
+-- render it, and arbitrate by intrinsic importance instead of raw volume.
+
 
 Rumble = Rumble or {}
 
@@ -19,17 +16,21 @@ Rumble.desktop_env = Rumble.desktop_env or {
 
 Rumble.last_fire = Rumble.last_fire or {}
 
---------------------------------------------------
------------------- HELPERS ------------------------
---------------------------------------------------
-
 local function clamp01(v)
     return math.max(0, math.min(1, v))
 end
 
--- the pad can be unplugged at any moment, and a stale joystick userdata is
--- not something to gamble on across every sdl/xinput combination. check
--- connection and swallow any error instead of taking down the frame.
+-- device dependent, hence configurable. below this the heavy motor just
+-- stalls rather than buzzing weakly, so there is no point commanding it.
+local function heavy_floor()
+    local pct = tonumber(Rumble.MOD.config.heavy_stall_floor) or 15
+    return math.max(0, math.min(0.6, pct / 100))
+end
+
+local function heavy_gate_on()
+    return Rumble.MOD.config.heavy_gate ~= false
+end
+
 local function apply_rumble(left, right)
     local controller = G and G.CONTROLLER
     local gamepad = controller and controller.GAMEPAD
@@ -40,19 +41,35 @@ local function apply_rumble(left, right)
     end
 
     pcall(function()
-        if type(pad.isConnected) == "function" then
-            if not pad:isConnected() then
-                return
-            end
+        if type(pad.isConnected) == "function" and not pad:isConnected() then
+            return
         end
-
         pad:setVibration(left, right)
     end)
 end
 
---------------------------------------------------
------------------- DESKTOP ENGINE -----------------
---------------------------------------------------
+-- strongest-wins, but ranked by INTRINSIC weight first and tuned volume
+-- second. otherwise cranking a menu tap's strength makes it outrank the
+-- round's cash out, which is exactly what the log showed happening twice.
+local function pick_winner(eligible)
+    local cat, w, rank = nil, 0, -1
+
+    for _, ev in ipairs(eligible) do
+        if Rumble.cat_enabled(ev.cat) then
+            local meta = Rumble.CATEGORY_DEFAULTS[ev.cat]
+            local tuned = (ev.force_weight or meta.base_weight)
+                * (Rumble.cat_strength(ev.cat) / 100)
+
+            local importance = meta.base_weight
+
+            if importance > rank or (importance == rank and tuned > w) then
+                cat, w, rank = ev.cat, tuned, importance
+            end
+        end
+    end
+
+    return cat, w
+end
 
 function Rumble.run_desktop(dt, fired, master)
     local env = Rumble.desktop_env
@@ -71,24 +88,10 @@ function Rumble.run_desktop(dt, fired, master)
         end
     end
 
-    -- strongest eligible event owns the frame. counts do NOT multiply desktop
-    -- amplitude; that was the bug where four stacked coins felt like a cash
-    -- out. count only matters on android, where it lengthens the pulse.
-    local strongest, strongest_cat = 0, nil
-    for _, ev in ipairs(eligible) do
-        if Rumble.cat_enabled(ev.cat) then
-            local w = (ev.force_weight or Rumble.CATEGORY_DEFAULTS[ev.cat].base_weight)
-                * (Rumble.cat_strength(ev.cat) / 100)
-
-            if w > strongest then
-                strongest, strongest_cat = w, ev.cat
-            end
-        end
-    end
-
+    local strongest_cat, strongest = pick_winner(eligible)
     local before = env.level
 
-    if strongest > 0 then
+    if strongest_cat and strongest > 0 then
         Rumble.last_fire[strongest_cat] = Rumble.frame_clock
 
         if env.level <= 0 then
@@ -131,12 +134,25 @@ function Rumble.run_desktop(dt, fired, master)
 
     local amt = clamp01(env.level * 0.4 * master)
 
-    -- constant-power crossfade. single-motor pads end up using max(left,
-    -- right), so a balanced mix still feeds one motor ~0.707 instead of the
-    -- old 0.5, which is strictly an improvement there too.
+    -- constant-power crossfade
     local t = env.heavy or 0.5
     local left = clamp01(amt * math.sin(t * math.pi / 2))
     local right = clamp01(amt * math.cos(t * math.pi / 2))
+
+    -- heavy stall gate. if the heavy channel comes in under the floor, hand
+    -- that energy to the light motor instead of commanding a stalled one.
+    -- total power is preserved - the event just gets rendered by the motor
+    -- that can actually render it. this is the difference between a crisp
+    -- tick and a dying buzz on every low-weight, high-repeat event.
+    local floor = heavy_floor()
+    if heavy_gate_on() and left > 0 and left < floor then
+        right = clamp01(right + left)
+        left = 0
+    end
+
+    if Rumble.dbg_enabled() and (left > 0 or right > 0) then
+        Rumble.dbg("desktop COMMAND L=%.3f R=%.3f", left, right)
+    end
 
     apply_rumble(left, right)
 end

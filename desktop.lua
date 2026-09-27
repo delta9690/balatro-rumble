@@ -62,7 +62,7 @@ local function pick_winner(eligible)
 
             local importance = meta.base_weight
 
-            if importance > rank or (importance == rank and tuned > w) then
+            if tuned > 0 and (importance > rank or (importance == rank and tuned > w)) then
                 cat, w, rank = ev.cat, tuned, importance
             end
         end

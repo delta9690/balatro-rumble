@@ -414,92 +414,107 @@ function Rumble.try_install_hooks()
         return true
     end
 
-    -- someone already hooked these (previous run, hot reload). don't stack.
-    if _G.__RUMBLE_HOOKS then
-        Rumble.installed = true
-        return true
-    end
-
-    if type(update_canvas_juice) ~= "function" then
-        return false
-    end
-
-    capture_originals()
-
-    -- main frame hook
-    update_canvas_juice = function(dt)
-        safe_frame(math.max(0, tonumber(dt) or 0))
-    end
-
-    -- ui click counter. chain, never replace. only real clickables count,
-    -- otherwise every hover would buzz.
-    if type(UIElement) == "table" and type(Rumble.originals.click) == "function" then
-        local original_click = Rumble.originals.click
-
-        UIElement.click = function(self, ...)
-            local cfg = self and self.config
-            if cfg and cfg.button ~= nil then
-                Rumble.click_count_frame = (Rumble.click_count_frame or 0) + 1
-            end
-            return original_click(self, ...)
+    if not _G.__RUMBLE_HOOKS then
+        if type(update_canvas_juice) ~= "function" then
+            return false
         end
-    else
-        sendDebugMessage("Rumble: UIElement.click missing; menu taps won't fire")
-    end
 
-    -- card destruction. two entry points, one count per card.
-    if type(Rumble.originals.dissolve) == "function" then
-        Card.start_dissolve = wrap_destroy(Rumble.originals.dissolve)
-    end
+        capture_originals()
 
-    if type(Rumble.originals.shatter) == "function" then
-        Card.shatter = wrap_destroy(Rumble.originals.shatter)
-    end
+        -- main frame hook
+        update_canvas_juice = function(dt)
+            safe_frame(math.max(0, tonumber(dt) or 0))
+        end
 
-    -- controller confirm ground truth for the ambiguous 1.0 vibration
-    if type(Controller) == "table" and type(Rumble.originals.capture) == "function" then
-        local original_capture = Rumble.originals.capture
+        -- ui click counter. chain, never replace. only real clickables count,
+        -- otherwise every hover would buzz.
+        if type(UIElement) == "table" and type(Rumble.originals.click) == "function" then
+            local original_click = Rumble.originals.click
 
-        Controller.capture_focused_input = function(self, ...)
-            local ret = original_capture(self, ...)
-
-            if ret == true then
-                Rumble.confirm_fired_frame = true
-
-                if Rumble.dbg_enabled() then
-                    Rumble.dbg("BTN capture %s", tostring((...)))
+            UIElement.click = function(self, ...)
+                local cfg = self and self.config
+                if cfg and cfg.button ~= nil then
+                    Rumble.click_count_frame = (Rumble.click_count_frame or 0) + 1
                 end
+                return original_click(self, ...)
             end
-
-            return ret
+        else
+            sendDebugMessage("Rumble: UIElement.click missing; menu taps won't fire")
         end
+
+        -- controller confirm ground truth for the ambiguous 1.0 vibration
+        if type(Controller) == "table" and type(Rumble.originals.capture) == "function" then
+            local original_capture = Rumble.originals.capture
+
+            Controller.capture_focused_input = function(self, ...)
+                local ret = original_capture(self, ...)
+
+                if ret == true then
+                    Rumble.confirm_fired_frame = true
+
+                    if Rumble.dbg_enabled() then
+                        Rumble.dbg("BTN capture %s", tostring((...)))
+                    end
+                end
+
+                return ret
+            end
+        end
+
+        -- debug input logging. varargs so a signature change can't misalign, and
+        -- the tostring allocation is skipped entirely when logging is off.
+        if type(Controller) == "table" and type(Rumble.originals.bpu) == "function" then
+            local original_bpu = Rumble.originals.bpu
+
+            Controller.button_press_update = function(self, ...)
+                if Rumble.dbg_enabled() then
+                    Rumble.dbg("BTN press %s", tostring((...)))
+                end
+                return original_bpu(self, ...)
+            end
+        end
+
+        if type(Controller) == "table" and type(Rumble.originals.kpu) == "function" then
+            local original_kpu = Rumble.originals.kpu
+
+            Controller.key_press_update = function(self, ...)
+                if Rumble.dbg_enabled() then
+                    Rumble.dbg("KEY press %s", tostring((...)))
+                end
+                return original_kpu(self, ...)
+            end
+        end
+
+        _G.__RUMBLE_HOOKS = true
     end
 
-    -- debug input logging. varargs so a signature change can't misalign, and
-    -- the tostring allocation is skipped entirely when logging is off.
-    if type(Controller) == "table" and type(Rumble.originals.bpu) == "function" then
-        local original_bpu = Rumble.originals.bpu
-
-        Controller.button_press_update = function(self, ...)
-            if Rumble.dbg_enabled() then
-                Rumble.dbg("BTN press %s", tostring((...)))
-            end
-            return original_bpu(self, ...)
+    if not _G.__RUMBLE_CARD_HOOKS then
+        if type(Card) ~= "table" then
+            return false
         end
+
+        capture_originals()
+
+        local wrapped = false
+
+        -- card destruction. two entry points, one count per card.
+        if type(Rumble.originals.dissolve) == "function" then
+            Card.start_dissolve = wrap_destroy(Rumble.originals.dissolve)
+            wrapped = true
+        end
+
+        if type(Rumble.originals.shatter) == "function" then
+            Card.shatter = wrap_destroy(Rumble.originals.shatter)
+            wrapped = true
+        end
+
+        if not wrapped then
+            return false
+        end
+
+        _G.__RUMBLE_CARD_HOOKS = true
     end
 
-    if type(Controller) == "table" and type(Rumble.originals.kpu) == "function" then
-        local original_kpu = Rumble.originals.kpu
-
-        Controller.key_press_update = function(self, ...)
-            if Rumble.dbg_enabled() then
-                Rumble.dbg("KEY press %s", tostring((...)))
-            end
-            return original_kpu(self, ...)
-        end
-    end
-
-    _G.__RUMBLE_HOOKS = true
     Rumble.installed = true
     return true
 end
@@ -520,15 +535,17 @@ function Rumble.install_love_update()
         return
     end
 
+    local original = Rumble.originals.update or love.update
+
+    if type(original) ~= "function" then
+        return
+    end
+
+    Rumble.originals.update = original
     _G.__RUMBLE_LOVE_UPDATE = true
 
-    local original = Rumble.originals.update or love.update
-    Rumble.originals.update = original
-
     love.update = function(dt)
-        if original then
-            original(dt)
-        end
+        original(dt)
 
         if (Rumble.love_update_errors or 0) >= MAX_FRAME_ERRORS then
             return
@@ -537,6 +554,10 @@ function Rumble.install_love_update()
         local ok = pcall(function()
             if not Rumble.installed then
                 Rumble.try_install_hooks()
+            end
+
+            if not Rumble.funcs_installed then
+                Rumble.try_install_funcs()
             end
 
             Rumble.tick_debug(dt)

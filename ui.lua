@@ -21,10 +21,6 @@ local W_A = 3.6
 local W_B = 3.4
 local ROW_W = W_TOGGLE + W_LABEL + W_A + W_B
 
--- computed lazily. at file scope this ran during SMODS.load_file, before
--- anything guarantees G.C exists - which is a launch-time crash for every
--- user if the load order ever shifts. by the time a tab is opened, G.C is
--- unquestionably there.
 local ROW_BG_CACHE
 local function row_bg()
     if not ROW_BG_CACHE then
@@ -238,7 +234,7 @@ end
 
 local GAMEPLAY_CATS = {
     "card_draw", "coin", "cash_out", "hand_played",
-    "card_score", "blind_reveal", "startup_card"
+    "card_score", "blind_reveal", "card_destroy", "startup_card"
 }
 
 local UI_CATS = { "ui_confirm", "ui_focus", "ui_tap" }
@@ -258,8 +254,9 @@ local function config_tab()
         rows[#rows + 1] = note_row("settle gap: raise if the motor stutters between pulses")
     else
         rows[#rows + 1] = slider_setting("Attack Hold (ms)", "desktop_hold_ms", 0, 250, "")
-        rows[#rows + 1] = note_row("hold: time the pad stays at full strength before decaying")
-        rows[#rows + 1] = note_row("heavy motor = left channel, light motor = right channel")
+        rows[#rows + 1] = slider_setting("Heavy Stall Floor", "heavy_stall_floor", 0, 40, "%")
+        rows[#rows + 1] = toggle_setting("Heavy Gate", "heavy_gate")
+        rows[#rows + 1] = note_row("below the stall floor the heavy motor just twitches, so that energy is diverted to the light motor")
     end
 
     rows[#rows + 1] = toggle_setting("Debug Log", "debug_log")
@@ -279,7 +276,7 @@ local function gameplay_tab()
     for _, cat in ipairs(GAMEPLAY_CATS) do
         rows[#rows + 1] = cat_row(cat)
     end
-    rows[#rows + 1] = note_row("unchecking disables that event entirely - zero rumble, nothing passed to vanilla")
+    rows[#rows + 1] = note_row("unchecking disables that event entirely")
     rows[#rows + 1] = note_row("strength 100% = default, 200% = doubled. mix: heavy (left) vs light (right) motor")
 
     return page(rows)
@@ -306,7 +303,7 @@ local function gameplay_feel_tab()
     end
     rows[#rows + 1] = note_row(Rumble.IS_ANDROID
         and "android has no amplitude api, so a longer pulse is the only way to feel stronger"
-        or "decay = how fast the pad falls off after a hit. higher = snappier, lower = longer tail")
+        or "decay = how fast the rumble falls off. higher = snappier, lower = longer tail")
 
     return page(rows)
 end
@@ -320,7 +317,7 @@ local function ui_feel_tab()
     end
     rows[#rows + 1] = note_row(Rumble.IS_ANDROID
         and "android has no amplitude api, so a longer pulse is the only way to feel stronger"
-        or "decay = how fast the pad falls off after a hit. higher = snappier, lower = longer tail")
+        or "decay = how fast the rumble falls off. higher = snappier, lower = longer tail")
 
     return page(rows)
 end
@@ -374,7 +371,6 @@ function Rumble.install_ui()
 
     Rumble.MOD.extra_tabs = function()
         Rumble.ensure_config()
-
         return {
             { label = "Gameplay", tab_definition_function = gameplay_tab },
             { label = "UI", tab_definition_function = ui_tab },
@@ -382,4 +378,9 @@ function Rumble.install_ui()
             { label = "UI Feel", tab_definition_function = ui_feel_tab },
         }
     end
+
+    -- register now AND again from love.update. both calls are idempotent, and
+    -- this is what keeps the cycle widgets alive if the love.update wrapper
+    -- bailed out at load.
+    Rumble.try_install_funcs()
 end

@@ -1,3 +1,11 @@
+-- metadata lives in Rumble.json.
+--
+-- do NOT put a --- STEAMODDED HEADER block back in this file. steamodded
+-- would read both sources and try to load the mod twice, which crashes with:
+--     attempt to index field 'INIT' (a nil value)
+-- the old header compat path also broke config loading, because the JSON
+-- path is what registers config.lua.
+
 
 
 if not Rumble then

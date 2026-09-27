@@ -80,10 +80,10 @@ end
 -- non-empty buffer.
 local LOG_NAME = "rumble_debug.log"
 local LOG_OLD_NAME = "rumble_debug_old.log"
-local LOG_MAX_BYTES = 1024 * 1024 * 2
-local LOG_MAX_LINE = 400
-local LOG_MAX_BUFFER = 200
-local LOG_FLUSH_INTERVAL = 1.0
+local LOG_MAX_BYTES = 1024 * 1024 * 16
+local LOG_MAX_LINE = 2000
+local LOG_MAX_BUFFER = 1000
+local LOG_FLUSH_INTERVAL = 2.0
 
 Rumble.debug_buffer = Rumble.debug_buffer or {}
 Rumble.debug_flush_timer = Rumble.debug_flush_timer or 0
@@ -123,12 +123,47 @@ function Rumble.dbg(fmt, ...)
     end
 end
 
+-- one-time banner lines (mod identity + platform) written at the top of the
+-- FIRST flush. stored behind a flag so it's present whether debug_log is on
+-- at boot or toggled later, and never duplicated.
+Rumble.header_written = Rumble.header_written or false
+
+function Rumble.debug_header()
+    local mod = Rumble.MOD or {}
+    local name = mod.name or mod.display_name or "Rumble"
+    local version = tostring(mod.version or "?")
+    local author = ""
+    local a = mod.author
+    if type(a) == "table" then author = table.concat(a, ", ")
+    elseif type(a) == "string" then author = a end
+
+    local backend = Rumble.IS_ANDROID and "Android (single-motor)" or "Desktop (dual-motor)"
+
+    local lines = {
+        "==================== RUMBLE ====================",
+        ("mod      %s v%s"):format(name, version),
+    }
+    if author ~= "" then lines[#lines + 1] = ("author   %s"):format(author) end
+    lines[#lines + 1] = ("engine   %s"):format(Rumble.ENGINE_VERSION or "?")
+    lines[#lines + 1] = ("os       %s"):format(Rumble.platform_label())
+    lines[#lines + 1] = ("backend  %s"):format(backend)
+    lines[#lines + 1] = "================================================="
+    return lines
+end
+
 function Rumble.flush_debug()
     if #Rumble.debug_buffer == 0 then
         return
     end
 
-    local text = table.concat(Rumble.debug_buffer, "\n") .. "\n"
+    local text
+    if not Rumble.header_written then
+        Rumble.header_written = true
+        text = table.concat(Rumble.debug_header(), "\n") .. "\n"
+            .. table.concat(Rumble.debug_buffer, "\n") .. "\n"
+    else
+        text = table.concat(Rumble.debug_buffer, "\n") .. "\n"
+    end
     Rumble.debug_buffer = {}
 
     local ok, err = pcall(function()
@@ -189,9 +224,20 @@ end
 
 Rumble.DEFAULTS = {
     master_strength = 100,
-    desktop_hold_ms = 60,
-    android_min_pulse_ms = 12,
-    android_settle_ms = 50,
+    heavy_hold_ms = 90,
+    light_hold_ms = 60,
+    heavy_floor = 15,
+    light_floor = 8,
+    onset_supplement = true,
+    onset_supplement_ms = 60,
+    onset_supplement_level = 35,
+    kick_mode = "multiplicative",
+    kick_amount = 35,
+    kick_window_ms = 25,
+    spinup_assist = true,
+    assist_window_ms = 30,
+    flame_enabled = true,
+    score_scaling_enabled = false,
     debug_log = false,
 }
 
@@ -215,24 +261,28 @@ function Rumble.ensure_config()
             c[cat .. "_enabled"] = true
         end
 
-        if type(c[cat .. "_strength"]) ~= "number" then
-            c[cat .. "_strength"] = 100
+        if type(c[cat .. "_power"]) ~= "number" then
+            c[cat .. "_power"] = meta.power
         end
 
         if type(c[cat .. "_decay"]) ~= "number" then
-            c[cat .. "_decay"] = meta.default_decay
+            c[cat .. "_decay"] = meta.decay
         end
 
         if type(c[cat .. "_duration_ms"]) ~= "number" then
-            c[cat .. "_duration_ms"] = meta.default_duration_ms
+            c[cat .. "_duration_ms"] = meta.duration
         end
 
         if type(c[cat .. "_min_retrigger_ms"]) ~= "number" then
-            c[cat .. "_min_retrigger_ms"] = (meta.default_min_retrigger_s or 0) * 1000
+            c[cat .. "_min_retrigger_ms"] = 0
         end
 
-        if type(c[cat .. "_motor_profile_index"]) ~= "number" then
-            c[cat .. "_motor_profile_index"] = Rumble.cat_motor_index(cat)
+        if type(c[cat .. "_kick"]) ~= "boolean" then
+            c[cat .. "_kick"] = true
+        end
+
+        if type(c[cat .. "_motor_profile"]) ~= "number" then
+            c[cat .. "_motor_profile"] = meta.profile
         end
     end
 end
@@ -244,61 +294,17 @@ function Rumble.master_fraction()
     return v / 100
 end
 
-function Rumble.hold_s()
-    return math.max(0, (Rumble.MOD.config.desktop_hold_ms or 60) / 1000)
+function Rumble.hold_s(heavy)
+    local key = heavy and "heavy_hold_ms" or "light_hold_ms"
+    return math.max(0, (Rumble.MOD.config[key] or (heavy and 90 or 60)) / 1000)
 end
 
-function Rumble.min_pulse()
-    return math.max(0.001, (Rumble.MOD.config.android_min_pulse_ms or 12) / 1000)
-end
-
-function Rumble.settle()
-    return math.max(0, (Rumble.MOD.config.android_settle_ms or 50) / 1000)
-end
-
--- every one of these defaults to a sensible value, never "off". defaulting
--- nil to off is what silently killed desktop rumble for a whole version: a
--- missing key read as false and our zeroed write clobbered vanilla's real
--- one every frame. do not get cute and change that back.
-function Rumble.cat_enabled(cat)
-    local v = Rumble.MOD.config[cat .. "_enabled"]
-    if v == nil then
-        return true
-    end
-    return v == true
-end
-
-function Rumble.cat_strength(cat)
-    local v = Rumble.MOD.config[cat .. "_strength"]
-    if type(v) ~= "number" then
-        v = 100
-    end
-    return v
-end
-
-function Rumble.cat_decay(cat)
-    local v = Rumble.MOD.config[cat .. "_decay"]
-    if type(v) ~= "number" then
-        v = Rumble.CATEGORY_DEFAULTS[cat].default_decay
-    end
-    return v
-end
-
-function Rumble.cat_duration(cat)
-    local v = Rumble.MOD.config[cat .. "_duration_ms"]
-    if type(v) ~= "number" then
-        v = Rumble.CATEGORY_DEFAULTS[cat].default_duration_ms
-    end
-    return v / 1000
-end
-
-function Rumble.cat_min_retrigger(cat)
-    local v = Rumble.MOD.config[cat .. "_min_retrigger_ms"]
-    if type(v) ~= "number" then
-        v = (Rumble.CATEGORY_DEFAULTS[cat].default_min_retrigger_s or 0) * 1000
-    end
-    return v / 1000
-end
+-- per-category getters (cat_power, cat_enabled, cat_decay, cat_duration,
+-- cat_min_retrigger, cat_profile) live in categories.lua next to the actual
+-- CATEGORY_DEFAULTS table. do NOT redefine them here - a previous copy
+-- referenced .default_decay / .default_duration_ms / .default_min_retrigger_s,
+-- keys that categories.lua renamed to .decay / .duration / (gone), and the
+-- shadowed copy was a latent crash waiting for a load-order change. fight me.
 
 --------------------------------------------------
 ------------------ FILE LOADING -------------------
@@ -346,5 +352,6 @@ Rumble.install_haptics()
 -- it also drives the retries and the debug flush.
 Rumble.install_love_update()
 
-sendDebugMessage("Rumble v5 loaded (" .. Rumble.platform_label()
+sendDebugMessage("Rumble engine " .. tostring(Rumble.ENGINE_VERSION)
+    .. " loaded (" .. Rumble.platform_label()
     .. (Rumble.IS_PROTON_WINE and (": " .. Rumble.PROTON_REASON) or "") .. ")")

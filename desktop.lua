@@ -29,7 +29,7 @@ end
 -- device dependent, hence configurable. below this the heavy motor just
 -- stalls rather than buzzing weakly, so there is no point commanding it.
 local function heavy_floor()
-    local v = tonumber(Rumble.MOD.config.heavy_floor) or 15
+    local v = tonumber(Rumble.MOD.config.heavy_stall_floor) or 15
     -- clamp covers the full plausible config range, not just the slider's.
     -- the slider tops out at 40% but a hand-edited config.lua can say 100.
     return math.max(0, math.min(100, v)) / 100

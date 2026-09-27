@@ -89,6 +89,11 @@ function Rumble.dbg_enabled()
     return cfg ~= nil and cfg.debug_log == true
 end
 
+-- compatibility helper for older call sites that still check `verbose`.
+function Rumble.verbose()
+    return Rumble.dbg_enabled()
+end
+
 -- safe by construction: the format call itself is inside pcall, so a bad
 -- format string or a nil argument logs nothing instead of taking the frame
 -- down with it. this gets called from inside the update loop, so "logs

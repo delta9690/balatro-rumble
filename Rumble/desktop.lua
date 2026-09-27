@@ -151,20 +151,28 @@ function Rumble.run_desktop(dt, fired, master)
                 ev.cat, ev.count or 1, contribution, profile_name,
                 tostring(since < gap), ev.source_tag or "UNKNOWN")
 
-            local h, l = route(ev.cat, contribution, requested_heavy, requested_light)
+            local prev_heavy, prev_light = requested_heavy, requested_light
+            local h, l = route(ev.cat, contribution, prev_heavy, prev_light)
             requested_heavy, requested_light = h, l
+
+            -- Strongest-wins attribution. Profile bleed means ONE event can
+            -- raise BOTH channels, so tag a channel's category only when THIS
+            -- event actually pushed that channel higher (route() already
+            -- maxes, so h/l only strictly exceed prev when this event won).
+            -- Otherwise, when several categories fire in one frame, the last
+            -- event's decay would overwrite the one that truly owned the peak.
+            if h > prev_heavy then heavy_cat = ev.cat end
+            if l > prev_light then light_cat = ev.cat end
 
             if since >= gap then
                 -- Spaced-out event -> a distinct tick.
                 if primary_heavy then
-                    heavy_cat = ev.cat
                     if contribution * 100 >= (Rumble.MOD.config.heavy_floor or 15)
                         and spinup_assist_on() then
                         local window = (Rumble.MOD.config.assist_window_ms or 30) / 1000
                         Rumble.desktop_channels.heavy.assist_until = now + window
                     end
                 else
-                    light_cat = ev.cat
                     if Rumble.MOD.config[ev.cat .. "_kick"] ~= false then
                         local window = (Rumble.MOD.config.kick_window_ms or 25) / 1000
                         Rumble.desktop_channels.light.kick_until = now + window

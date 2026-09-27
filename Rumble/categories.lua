@@ -67,9 +67,20 @@ function Rumble.cat_profile(cat)
     return profile(Rumble.MOD.config[cat .. "_motor_profile"])
 end
 
+-- Safe metadata lookup. Every getter indexes CATEGORY_DEFAULTS[cat], which
+-- NASTILY crashes (sorry) on an unknown category - things like a placeholder
+-- "(none)" or a future category that hasn't been added to the table yet. this
+-- returns a sane fallback instead of a nil index, so a bad cat degrades to
+-- "a faint, safe tick" rather than taking the whole frame down.
+local CATEGORY_FALLBACK = { label = "Unknown", power = 20, profile = 3, decay = 10, duration = 30 }
+
+local function cat_meta(cat)
+    return Rumble.CATEGORY_DEFAULTS[cat] or CATEGORY_FALLBACK
+end
+
 function Rumble.cat_power(cat)
     local value = tonumber(Rumble.MOD.config[cat .. "_power"])
-        or Rumble.CATEGORY_DEFAULTS[cat].power
+        or cat_meta(cat).power
     return math.max(0, math.min(100, value)) / 100
 end
 
@@ -79,12 +90,12 @@ end
 
 function Rumble.cat_decay(cat)
     return math.max(1, tonumber(Rumble.MOD.config[cat .. "_decay"])
-        or Rumble.CATEGORY_DEFAULTS[cat].decay)
+        or cat_meta(cat).decay)
 end
 
 function Rumble.cat_duration(cat)
     return math.max(0.001, tonumber(Rumble.MOD.config[cat .. "_duration_ms"])
-        or Rumble.CATEGORY_DEFAULTS[cat].duration) / 1000
+        or cat_meta(cat).duration) / 1000
 end
 
 function Rumble.cat_min_retrigger(cat)

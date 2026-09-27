@@ -234,7 +234,7 @@ end
 
 local GAMEPLAY_CATS = {
     "card_draw", "coin", "cash_out", "hand_played",
-    "card_score", "blind_reveal", "startup_card"
+    "card_score", "blind_reveal", "card_destroy", "startup_card"
 }
 
 local UI_CATS = { "ui_confirm", "ui_focus", "ui_tap" }

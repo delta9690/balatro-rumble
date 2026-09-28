@@ -16,6 +16,7 @@ local function duration_for(event, master)
     -- power=100 maps to 100%, so a weak event still tickles rather than
     -- becoming definitionally invisible. the count factor is capped at 4 so a
     -- dozen coins in one frame can't become a solid ten-second drone.
+    -- (android haptics are a joke. we do what we can.)
     local count = math.min(event.count or 1, 4)
     local power = Rumble.cat_power(event.cat)
     return math.max(0.012, base * (0.25 + 0.75 * power) * master * count)

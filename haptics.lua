@@ -80,8 +80,8 @@ local function consume_events(raw_vibration, blind_reveal)
 
     -- focus is STILL classification-by-magnitude (0.7 +/- a hair), the one
     -- number we could prove is independent of every presentation setting.
-    -- 0.7 leans on the same broken 0.67..0.73 window the old code used; it's
-    -- fine because nothing else legitimately lands in that exact spot.
+    -- (yes, classifying by magnitude is gross. but it's the only signal that
+    -- survives every settings combo, so here we are. I also hate having to do this awfulness.)
     local FOCUS_VIB = 0.7
 
     if Rumble.confirm_fired_frame then

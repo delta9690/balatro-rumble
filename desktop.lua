@@ -17,10 +17,56 @@ end
 -- little tantrum about it.
 local SOAK_THRESHOLD = 0.008
 
+local function resolve_gamepad()
+    local controller = G and G.CONTROLLER
+    local gamepad = controller and controller.GAMEPAD
+    if gamepad and gamepad.object then return gamepad.object end
+
+    -- Balatro normally binds a joystick during Game:init only when F_RUMBLE
+    -- is already set. Rumble turns that flag on later, so a pad that has not
+    -- sent input yet can be sitting there unbound through the whole title
+    -- animation. Ask LÖVE for a gamepad and bind it now; waiting for the first
+    -- button press made the startup haptics beautifully silent. very helpful.
+    local joystick_api = love and love.joystick
+    if not controller or type(controller.set_gamepad) ~= "function"
+        or not joystick_api or type(joystick_api.getJoysticks) ~= "function" then
+        return nil
+    end
+
+    local ok, joysticks = pcall(joystick_api.getJoysticks)
+    if not ok or type(joysticks) ~= "table" then return nil end
+
+    -- Match Balatro's own initial selection (second joystick, then first),
+    -- but only bind actual gamepads. A random HID joystick isn't necessarily
+    -- going to support the gamepad methods the rest of the controller uses.
+    for index = 2, 1, -1 do
+        local joystick = joysticks[index]
+        if joystick and type(joystick.isGamepad) == "function" then
+            local is_gamepad_ok, is_gamepad = pcall(joystick.isGamepad, joystick)
+            if is_gamepad_ok and is_gamepad then
+                local bound = pcall(controller.set_gamepad, controller, joystick)
+                if bound and gamepad and gamepad.object then
+                    Rumble.last_commands.heavy, Rumble.last_commands.light = -1, -1
+                    Rumble.dbg("desktop CONTROLLER_BOUND name=%s",
+                        tostring(gamepad.name or "unknown"))
+                    return gamepad.object
+                end
+            end
+        end
+    end
+    return nil
+end
+
 local function apply_rumble(heavy, light)
-    local gamepad = G and G.CONTROLLER and G.CONTROLLER.GAMEPAD
-    local pad = gamepad and gamepad.object
-    if not pad then return end
+    local pad = resolve_gamepad()
+    if not pad then
+        if not Rumble.missing_gamepad_logged then
+            Rumble.dbg("desktop NO_GAMEPAD joystick_not_bound=true")
+            Rumble.missing_gamepad_logged = true
+        end
+        return
+    end
+    Rumble.missing_gamepad_logged = false
     local should_write = math.abs(heavy - (Rumble.last_commands.heavy or -1)) > SOAK_THRESHOLD
         or math.abs(light - (Rumble.last_commands.light or -1)) > SOAK_THRESHOLD
     -- Never skip the final write down to zero: if a channel is already stopped

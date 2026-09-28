@@ -28,8 +28,7 @@ tunable from an in-game menu.
   assignment.
 - **Flame effect support**  -  a score-vs-blind intensity layer that ramps
   rumble as a run heats up.
-- **Further controller tuning**  -  more granular spinup, kick, and hold
-  controls across more gamepads.
+- **Further controller tuning**  -  current defaults are mostly vibes based and may not have good response
 
 ## Why it exists
 

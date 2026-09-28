@@ -72,6 +72,7 @@ end
 -- "(none)" or a future category that hasn't been added to the table yet. this
 -- returns a sane fallback instead of a nil index, so a bad cat degrades to
 -- "a faint, safe tick" rather than taking the whole frame down.
+-- (this exists because i shipped a crash exactly like this. twice. i'm tired.)
 local CATEGORY_FALLBACK = { label = "Unknown", power = 20, profile = 3, decay = 10, duration = 30 }
 
 local function cat_meta(cat)

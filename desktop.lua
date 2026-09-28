@@ -13,7 +13,8 @@ end
 
 -- 0.008 is the "don't be an asshole to the hardware" threshold: skip the
 -- write unless the command actually changed by more than this, otherwise we
--- spam setVibration every frame with the same number and some pads hate that.
+-- spam setVibration every frame with the same number and some pads throw a
+-- little tantrum about it.
 local SOAK_THRESHOLD = 0.008
 
 local function apply_rumble(heavy, light)
@@ -85,6 +86,7 @@ end
 -- Returns the game-speed-scaled minimum gap, in seconds, between distinct
 -- ticks for a category. Below this gap (i.e. events arriving faster) we treat
 -- the stream as a sustained pulse and smooth it instead of re-ticking.
+-- (d-pad spam used to turn into one long mushy hum. this is the fix. mostly.)
 local function tick_gap_s(cat)
     local base = Rumble.cat_min_retrigger(cat)
     if base <= 0 then base = 0.018 end
@@ -98,7 +100,7 @@ end
 -- Large-motor spinup assist fires a momentary boost on the heavy channel for
 -- effects that primarily use the large motor, provided the heavy command is
 -- actually above its floor (no gating has been tripped). This is the universal
--- "get the large rotor up to speed" control.
+-- "get the large rotor up to speed" control. big motor is lazy, we kick it.
 local function spinup_assist_on()
     return Rumble.MOD.config.spinup_assist ~= false
 end
@@ -161,6 +163,8 @@ function Rumble.run_desktop(dt, fired, master)
             -- maxes, so h/l only strictly exceed prev when this event won).
             -- Otherwise, when several categories fire in one frame, the last
             -- event's decay would overwrite the one that truly owned the peak.
+            -- (this was the source of a genuinely cursed crash. the channel
+            -- got tagged "(none)" and cat_decay ate a nil. i lost an evening.)
             if h > prev_heavy then heavy_cat = ev.cat end
             if l > prev_light then light_cat = ev.cat end
 

@@ -1,5 +1,5 @@
 -- ui.lua - the mod menu. two layout rules matter here and both were learned
--- the hard way:
+-- the hard way, i.e. by me screaming at a misaligned pane for an hour:
 --
 --   1. a tab definition must return G.UIT.ROOT with align = "cm". returning
 --      a bare C only works for handy, because handy overrides
@@ -10,7 +10,7 @@
 --   2. there is no flexbox in this engine. no width:100%, no space-between.
 --      a node sizes itself to its children, and minw only stretches the BOX.
 --      so "use the width" means giving every row the same explicit minw and
---      padding the cells to match.
+--      padding the cells to match. i hate it here.
 
 Rumble = Rumble or {}
 
@@ -25,7 +25,8 @@ local ROW_W = COLUMN_W
 -- computed lazily. at file scope this ran during SMODS.load_file, before
 -- anything guarantees G.C exists - which is a launch-time crash for every
 -- user if the load order ever shifts. by the time a tab is opened, G.C is
--- unquestionably there.
+-- unquestionably there. (i found this the fun way: a crash on boot for
+-- literally everyone. cool. cool cool cool.)
 local ROW_BG_CACHE
 local function row_bg()
     if not ROW_BG_CACHE then
@@ -299,7 +300,8 @@ end
 -- scroll. this is what actually triggers the scrollbar: the middle content has
 -- to be taller than the (small) viewport, not padded out by the header/footer
 -- so the box itself just grows huge and refuses to scroll. learned the hard
--- way, obviously.
+-- way, obviously. (the scrollbox fought me for DAYS. we ended up paginating
+-- instead. this function only survives for the Info tab now. rip.)
 local function scroll_page(header_rows, middle_rows, footer_rows, maxh)
     if not has_scrollbox() then
         local all = {}
@@ -359,6 +361,7 @@ end
 -- them like steamodded pages its own card collections: a shoulder-button
 -- "Page X/Y" cycle rebuilds ONE stable object node. copying the proven
 -- your_collection_tags_page pattern instead of reinventing scrolling.
+-- (the scrollbox lost. pagination won. i'm at peace with it.)
 Rumble._page_builders = Rumble._page_builders or {}
 
 local function paged_grid_tab(cats, row_builder, header_label, footer_notes, page_key)
@@ -390,6 +393,8 @@ local function paged_grid_tab(cats, row_builder, header_label, footer_notes, pag
     -- so the grid O and the page cycle must each be wrapped in an R, or they
     -- drift right/up instead of sitting below. (the old config_tab never hit
     -- this because all its children are already rows.)
+    -- (this one took me an embarrassing amount of source-diving to figure out.
+    -- the page button kept ending up to the RIGHT of the text. i was losing it.)
     local col_nodes = { header_row(header_label) }
     col_nodes[#col_nodes + 1] = { n = G.UIT.R, config = { align = "cm" }, nodes = {
         {
@@ -608,7 +613,7 @@ end
 
 -- closure factory so each cycle callback knows its own category. without
 -- this every callback would capture the same loop variable and write the
--- wrong category's mix.
+-- wrong category's mix. (classic lua closure footgun. got me once. never again.)
 local function make_motor_callback(cat)
     return function(args)
         if args and args.to_key then

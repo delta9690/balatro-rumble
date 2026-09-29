@@ -1,6 +1,8 @@
 Rumble = Rumble or {}
 Rumble.android_active_until = Rumble.android_active_until or 0
 
+-- this entire engine is VERY poorly tested, and probably sucks a lot.
+
 local function vibrate(duration)
     if duration <= 0 or not love.system or type(love.system.vibrate) ~= "function" then
         return false

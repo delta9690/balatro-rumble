@@ -35,6 +35,10 @@ local function row_bg()
     return ROW_BG_CACHE
 end
 
+
+-- for the record: this ui sucks a lot. too bad.
+-- i will fix it soon
+
 --------------------------------------------------
 ------------------ ROW HELPERS --------------------
 --------------------------------------------------
@@ -567,6 +571,9 @@ local function info_tab()
         { "Infill", "the small motor fills the gap while the large motor accelerates, then blends out." },
         { "Decay", "how fast a hit falls off. higher = snappier, lower = longer tail." },
     }
+
+    --tofix: the table above doesn't lay out correctly; the longer lines mess up the alignment
+    --also needs a better android info tab
 
     local profiles = {
         { "Light", "all on the small (fast, crisp) motor. sharp ticks and texture." },

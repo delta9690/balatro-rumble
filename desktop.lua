@@ -12,9 +12,7 @@ local function clamp01(value)
 end
 
 -- 0.008 is the "don't be an asshole to the hardware" threshold: skip the
--- write unless the command actually changed by more than this, otherwise we
--- spam setVibration every frame with the same number and some pads throw a
--- little tantrum about it.
+-- write unless the command actually changed by more than this
 local SOAK_THRESHOLD = 0.008
 
 local function resolve_gamepad()
@@ -25,8 +23,8 @@ local function resolve_gamepad()
     -- Balatro normally binds a joystick during Game:init only when F_RUMBLE
     -- is already set. Rumble turns that flag on later, so a pad that has not
     -- sent input yet can be sitting there unbound through the whole title
-    -- animation. Ask LÖVE for a gamepad and bind it now; waiting for the first
-    -- button press made the startup haptics beautifully silent. very helpful.
+    -- animation. Ask Love for a gamepad and bind it now; waiting for the first
+    -- button press made the startup haptics beautifully silent
     local joystick_api = love and love.joystick
     if not controller or type(controller.set_gamepad) ~= "function"
         or not joystick_api or type(joystick_api.getJoysticks) ~= "function" then
@@ -71,7 +69,7 @@ local function apply_rumble(heavy, light)
         or math.abs(light - (Rumble.last_commands.light or -1)) > SOAK_THRESHOLD
     -- Never skip the final write down to zero: if a channel is already stopped
     -- but we're supposed to be at rest, still send it so the motor actually
-    -- halts instead of sitting at a residual like 0.006 forever.
+    -- halts instead of sitting at a residual like 0.006 forever (caused whining in testing)
     local must_zero = (heavy == 0 and (Rumble.last_commands.heavy or 0) ~= 0)
         or (light == 0 and (Rumble.last_commands.light or 0) ~= 0)
     if not should_write and not must_zero then return end
@@ -131,8 +129,7 @@ end
 
 -- Returns the game-speed-scaled minimum gap, in seconds, between distinct
 -- ticks for a category. Below this gap (i.e. events arriving faster) we treat
--- the stream as a sustained pulse and smooth it instead of re-ticking.
--- (d-pad spam used to turn into one long mushy hum. this is the fix. mostly.)
+-- the stream as a sustained pulse and smooth it instead of re-ticking
 local function tick_gap_s(cat)
     local base = Rumble.cat_min_retrigger(cat)
     if base <= 0 then base = 0.018 end
@@ -146,7 +143,7 @@ end
 -- Large-motor spinup assist fires a momentary boost on the heavy channel for
 -- effects that primarily use the large motor, provided the heavy command is
 -- actually above its floor (no gating has been tripped). This is the universal
--- "get the large rotor up to speed" control. big motor is lazy, we kick it.
+-- "get the large rotor up to speed" control.
 local function spinup_assist_on()
     return Rumble.MOD.config.spinup_assist ~= false
 end
@@ -155,8 +152,7 @@ end
 -- this EXACT envelope math, except the light channel ALSO carries a separate
 -- "infill" term that fills the gap while the large rotor spins up. That infill
 -- deserves its own decay curve, so it lives alongside here rather than being
--- folded into the main level (folding it in made infill permanent, which felt
--- like the motor was stuck on - no thanks).
+-- folded into the main level
 local function decay_channel(channel, dt, has_infill)
     if channel.hold > 0 then
         channel.hold = math.max(0, channel.hold - dt)
@@ -210,7 +206,7 @@ function Rumble.run_desktop(dt, fired, master)
             -- Otherwise, when several categories fire in one frame, the last
             -- event's decay would overwrite the one that truly owned the peak.
             -- (this was the source of a genuinely cursed crash. the channel
-            -- got tagged "(none)" and cat_decay ate a nil. i lost an evening.)
+            -- got tagged "(none)" and cat_decay ate a nil)
             if h > prev_heavy then heavy_cat = ev.cat end
             if l > prev_light then light_cat = ev.cat end
 

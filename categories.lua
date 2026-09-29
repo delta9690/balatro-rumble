@@ -45,7 +45,7 @@ Rumble.SOUND_MAP = {
 
 -- NOTE: profile order must match MOTOR_PROFILES above, or the UI's option
 -- cycle and this lookup disagree and everything routes to the wrong motor.
--- No, I will not write a test for this. Just don't reorder either table.
+-- I don't want to write a test. Just don't reorder either table.
 local PROFILE_BLEED = {
     [1] = { 0,   1    }, -- Light      -> all light, heavy never even spins
     [2] = { 0.28, 1    }, -- Light Bias -> mostly light, hint of heavy
@@ -68,11 +68,10 @@ function Rumble.cat_profile(cat)
 end
 
 -- Safe metadata lookup. Every getter indexes CATEGORY_DEFAULTS[cat], which
--- NASTILY crashes (sorry) on an unknown category - things like a placeholder
+-- instantly crashes on an unknown category - things like a placeholder
 -- "(none)" or a future category that hasn't been added to the table yet. this
 -- returns a sane fallback instead of a nil index, so a bad cat degrades to
 -- "a faint, safe tick" rather than taking the whole frame down.
--- (this exists because i shipped a crash exactly like this. twice. i'm tired.)
 local CATEGORY_FALLBACK = { label = "Unknown", power = 20, profile = 3, decay = 10, duration = 30 }
 
 local function cat_meta(cat)

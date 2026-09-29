@@ -79,9 +79,7 @@ end
 --------------------------------------------------
 
 -- one live file + one .old backup. lines capped, buffer capped, file capped.
--- ALL of the log state lives HERE - I once moved the flush timer out of this
--- file while haptics.lua was still poking at it, and we got "arithmetic on
--- nil" on frame ONE with a half-full buffer. never again. listen, it's fine.
+-- ALL of the log state lives HERE to avoid flushing during a write and crashing
 local LOG_NAME = "rumble_debug.log"
 local LOG_OLD_NAME = "rumble_debug_old.log"
 local LOG_MAX_BYTES = 1024 * 1024 * 16
@@ -127,9 +125,7 @@ function Rumble.dbg(fmt, ...)
     end
 end
 
--- one-time banner (mod identity + platform) jammed at the top of the FIRST
--- flush. gated behind a flag so it shows up whether debug_log was on at boot
--- or flipped later, and never prints twice like a doofus.
+-- make sure we dont double send the header lines
 Rumble.header_written = Rumble.header_written or false
 
 function Rumble.debug_header()
@@ -190,8 +186,7 @@ function Rumble.flush_debug()
     end
 end
 
--- called once at init so a new session doesn't dump on top of last run's
--- log like a roommate leaving dishes in the sink.
+-- called once at init so a new session doesn't pile on top of the previous run's log
 function Rumble.debug_init()
     pcall(function()
         if love.filesystem.getInfo(LOG_NAME) then
@@ -208,8 +203,6 @@ function Rumble.debug_init()
     Rumble.debug_flush_timer = 0
 end
 
--- periodic flush. yes, this is the line that used to explode. i eye it
--- suspiciously every time i open this file.
 function Rumble.tick_debug(dt)
     if not Rumble.dbg_enabled() then
         Rumble.debug_flush_timer = 0
@@ -307,10 +300,7 @@ end
 
 -- the per-category getters (cat_power, cat_enabled, cat_decay, cat_duration,
 -- cat_min_retrigger, cat_profile) live in categories.lua, right next to the
--- CATEGORY_DEFAULTS table they read. do NOT redefine them here. i did once,
--- and the shadow copy referenced .default_decay / .default_duration_ms /.default_min_retrigger_s - keys categories.lua had ALREADY renamed to .decay
--- / .duration / (deleted). it sat there as a landmine waiting for a load-
--- order shuffle. never again. i will bite.
+-- CATEGORY_DEFAULTS table they read
 
 --------------------------------------------------
 ------------------ FILE LOADING -------------------
@@ -319,7 +309,7 @@ end
 -- the id is passed explicitly. without it SMODS.load_file only works while
 -- SMODS.current_mod is set, which is true during load but NOT guaranteed on
 -- a later retry path. passing it costs nothing and stops me having to think
--- about timing. i do not want to think about timing.
+-- about timing
 local function boot_file(name)
     local chunk, err = SMODS.load_file(name, Rumble.MOD.id)
     assert(chunk, err)()
@@ -327,8 +317,7 @@ local function boot_file(name)
 end
 
 -- order matters: categories first (everyone reads its constants), then the
--- two platform engines, then the shared frame driver, then the menus. shuffle
--- this and you get to enjoy a mystery crash at boot. have fun.
+-- two platform engines, then the shared frame driver, then the menus
 boot_file("categories.lua")
 boot_file("desktop.lua")
 boot_file("android.lua")
@@ -347,14 +336,12 @@ Rumble.debug_init()
 
 -- ui definitions are safe here (they only assign fields), but the G.FUNCS
 -- callbacks they point at retry below - we can be running before the game
--- has even built G.FUNCS. load order is a cursed, cursed thing.
+-- has even built G.FUNCS. load order is a hateful thing
 Rumble.install_ui()
 Rumble.try_install_funcs()
 
 -- update_canvas_juice may not exist yet either - it lives in the game's own
--- function files, which might not be loaded yet. install_haptics shrugs and
--- returns quietly, and the love.update wrapper keeps knocking on the door
--- until the game answers.
+-- function files, which might not be loaded yet. 
 Rumble.install_haptics()
 
 -- installed no matter what, because it also drives the retries and the
